@@ -12,11 +12,18 @@ To install chrolog_iohook, use npm:
 npm install chrolog_iohook
 ```
 
+**Note:**
+
+- This library is only compatible with Linux operating systems.
+- Root privileges are required to use this library.
+
 ## Usage
 
 ```javascript
 const { ChrologIOhook } = require("chrolog_iohook");
+const os = require("os");
 
+if (os.platform !== "linux") return console.log("The program will not work");
 // Create an instance of ChrologIOhook
 const instance = new ChrologIOhook();
 
@@ -29,7 +36,7 @@ instance.setMouseCallback((event, value) => {
 	console.log("Mouse callback:", event, value);
 });
 
-//Start the logger
+// Start the logger
 instance.log();
 
 console.log("Logging keys...");
