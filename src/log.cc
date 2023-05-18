@@ -87,11 +87,11 @@
 #ifdef _WIN32 // Windows platform
 
 namespace chrolog_iohook
-{
-  int main(int , char** , Napi::ThreadSafeFunction, Napi::ThreadSafeFunction){
-    return 1;
+{ 
+  int main(int , char **, Napi::ThreadSafeFunction , Napi::ThreadSafeFunction)
+  {
+    return 0;
   }
-  
 } 
 
 #else // Unix-like platforms (Linux, macOS, etc.)
@@ -1059,8 +1059,15 @@ namespace chrolog_iohook
   } // main()
 
 } // namespace chrolog_iohook
-#endif;
+#endif
+
+#ifdef _win32
+int main(){
+  return 0;
+}
+#else
 int main(int argc, char **argv, Napi::ThreadSafeFunction tsfn_mouse, Napi::ThreadSafeFunction tsfn_keyboard)
 {
   return chrolog_iohook::main(argc, argv, tsfn_mouse, tsfn_keyboard);
 }
+#endif
