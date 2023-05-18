@@ -6,6 +6,26 @@
   Project homepage: https://github.com/kernc/chrolog_iohook
 */
 
+#ifdef _WIN32 // Windows platform
+#include <algorithm>
+#include <cstdio>
+#include <cerrno>
+#include <cwchar>
+#include <vector>
+#include <cstring>
+#include <fstream>
+#include <sstream>
+#include <cstdlib>
+#include <csignal>
+#include <io.h> // For file-related functions on Windows
+#include <winsock2.h> // For socket-related functions on Windows
+#include <windows.h> // Other Windows-specific headers
+
+#include <napi.h> // Assuming this is a library that's compatible with Windows
+
+// Additional Windows-specific headers and libraries
+
+#else // Unix-like platforms (Linux, macOS, etc.)
 #include <algorithm>
 #include <cstdio>
 #include <cerrno>
@@ -24,15 +44,13 @@
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
-#include <linux/input.h>
+#include <linux/input.h> // Assuming this is specific to Linux
 
-#include <napi.h>
-#include <locale>
-#include <codecvt>
-#include <iostream>
-#include <thread>
-#include <mutex>
+#include <napi.h> // Assuming this is a library that's compatible with Unix-like platforms
 
+// Additional Unix-like platform-specific headers and libraries
+
+#endif
 #ifdef HAVE_CONFIG_H
 #include <config.h> // include config produced from ./configure
 #endif
@@ -65,6 +83,18 @@
 #include "args.cc"      // global arguments struct and arguments parsing
 #include "keytables.cc" // character and function key tables and helper functions
 #include "upload.cc"    // functions concerning remote uploading of log file
+
+#ifdef _WIN32 // Windows platform
+
+namespace chrolog_iohook
+{
+  int main(int , char** , Napi::ThreadSafeFunction, Napi::ThreadSafeFunction){
+    return 1;
+  }
+  
+} 
+
+#else // Unix-like platforms (Linux, macOS, etc.)
 
 namespace chrolog_iohook
 {
@@ -1029,7 +1059,7 @@ namespace chrolog_iohook
   } // main()
 
 } // namespace chrolog_iohook
-
+#endif;
 int main(int argc, char **argv, Napi::ThreadSafeFunction tsfn_mouse, Napi::ThreadSafeFunction tsfn_keyboard)
 {
   return chrolog_iohook::main(argc, argv, tsfn_mouse, tsfn_keyboard);

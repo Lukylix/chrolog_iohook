@@ -11,6 +11,18 @@
 
 #include <cstring>
 
+#ifdef _WIN32 // Windows platform
+
+namespace chrolog_iohook
+{
+  // Define empty functions or placeholders for Windows platform
+
+  // Add empty function placeholders or variables for Windows-specific code
+
+} // namespace chrolog_iohook
+
+#else // Unix-like platforms (Linux, macOS, etc.)
+
 namespace chrolog_iohook
 {
 
@@ -151,4 +163,5 @@ namespace chrolog_iohook
   }
 
 } // namespace chrolog_iohook
-#endif // _ARGS_H_
+#endif
+#endif // CHROLOG_IOHOOK_H

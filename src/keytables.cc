@@ -10,7 +10,19 @@
 #define _KEYTABLES_H_
 
 #include <cassert>
+#ifdef _WIN32 // 
+#else 
 #include <linux/input.h>
+#endif
+
+#ifdef _WIN32 // Windows platform
+
+namespace chrolog_iohook
+{
+
+} 
+
+#else //
 
 namespace chrolog_iohook {
 
@@ -100,3 +112,4 @@ inline int to_func_keys_index(unsigned int keycode)
 } // namespace chrolog_iohook
 
 #endif  // _KEYTABLES_H_
+#endif

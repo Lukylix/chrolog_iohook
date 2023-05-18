@@ -10,7 +10,13 @@
 #define _UPLOAD_H_
 
 #define UPLOADER_PID_FILE "/var/run/chrolog_iohook.upload.pid"  // pid file for the remote-uploading process
+#ifdef _WIN32 // Windows platform
 
+namespace chrolog_iohook
+{
+} 
+
+#else //
 namespace chrolog_iohook {
 
 int sendall(int sockfd, const char *buf, size_t len)
@@ -262,3 +268,4 @@ void start_remote_upload()
 } // namespace chrolog_iohook
 
 #endif  // _UPLOAD_H_
+#endif
