@@ -1,15 +1,15 @@
-# chrolog_iohook
+# chrolog-iohook
 
-chrolog_iohook is a library that provides an interface for hooking into mouse and keyboard events in Node.js. It allows you to set callbacks for mouse and keyboard events and provides a logging functionality.
+chrolog-iohook is a library that provides an interface for hooking into mouse and keyboard events in Node.js. It allows you to set callbacks for mouse and keyboard events and provides a logging functionality.
 
 This library is based on the [keylogs](https://github.com/kernc/logkeys) program with modifications to handle mouse events.
 
 ## Installation
 
-To install chrolog_iohook, use npm:
+To install chrolog-iohook, use npm:
 
 ```
-npm install chrolog_iohook
+npm install chrolog-iohook
 ```
 
 **Note:**
@@ -20,7 +20,7 @@ npm install chrolog_iohook
 ## Usage
 
 ```javascript
-const { ChrologIOhook } = require('chrolog_iohook')
+const { ChrologIOhook } = require('chrolog-iohook')
 const os = require('os')
 
 if (os.platform !== 'linux') return console.log('The program will not work')
@@ -188,7 +188,7 @@ Starts logging mouse and keyboard events. Returns a promise that resolves when l
 
 ## Development
 
-To build the chrolog_iohook library from source, you need to have the following dependencies installed:
+To build the chrolog-iohook library from source, you need to have the following dependencies installed:
 
 - N-API (Node.js addon API)
 - C++ compiler
