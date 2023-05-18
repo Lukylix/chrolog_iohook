@@ -1,6 +1,6 @@
 {
 	"name": "chrolog-iohook",
-	"version": "1.0.3",
+	"version": "1.0.4",
 	"description": "Mouse and keybord hooks for the Chrolog tracker",
 	"main": "index.js",
 	"type": "commonjs",
