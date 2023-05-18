@@ -1,9 +1,8 @@
 {
 	"name": "chrolog-iohook",
-	"version": "1.0.4",
-	"description": "Mouse and keybord hooks for the Chrolog tracker",
+	"version": "1.0.5",
+	"description": "Mouse and keyboard hooks for the Chrolog tracker",
 	"main": "index.js",
-	"type": "commonjs",
 	"scripts": {
 		"build": "node-gyp configure build"
 	},
@@ -11,6 +10,17 @@
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/Lukylix/chrolog_iohook.git"
+	},
+	"keywords": [
+		"chrolog",
+		"iohook",
+		"hooks",
+		"mouse",
+		"keyboard"
+	],
+	"binary": {
+		"module_name": "chrolog_iohook",
+		"module_path": "./build/Release"
 	},
 	"license": "GNU",
 	"dependencies": {
