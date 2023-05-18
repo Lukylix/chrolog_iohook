@@ -22,11 +22,11 @@ jobs:
       - name: Check if package version has changed
         id: version_check
         run: |
-          CHANGED=$(git diff --name-only HEAD^..HEAD | grep package.json)
-          if [ -z "$CHANGED" ]; then
-            echo "::set-output name=version_changed::false"
-          else
+          CHANGED=$(node -pe "require('./package.json').version !== require('./package-lock.json').version")
+          if [ "$CHANGED" = "true" ]; then
             echo "::set-output name=version_changed::true"
+          else
+            echo "::set-output name=version_changed::false"
           fi
 
       - name: Publish package to npm
