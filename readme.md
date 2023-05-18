@@ -20,26 +20,26 @@ npm install chrolog_iohook
 ## Usage
 
 ```javascript
-const { ChrologIOhook } = require("chrolog_iohook");
-const os = require("os");
+const { ChrologIOhook } = require('chrolog_iohook')
+const os = require('os')
 
-if (os.platform !== "linux") return console.log("The program will not work");
+if (os.platform !== 'linux') return console.log('The program will not work')
 // Create an instance of ChrologIOhook
-const instance = new ChrologIOhook();
+const instance = new ChrologIOhook()
 
 // Set keyboard callback
 instance.setKeyboardCallback((key) => {
-	console.log("Keyboard callback:", key);
-});
+ console.log('Keyboard callback:', key)
+})
 
 instance.setMouseCallback((event, value) => {
-	console.log("Mouse callback:", event, value);
-});
+ console.log('Mouse callback:', event, value)
+})
 
 // Start the logger
-instance.log();
+instance.log()
 
-console.log("Logging keys...");
+console.log('Logging keys...')
 ```
 
 ## Security and Interprocess Communication
@@ -55,111 +55,113 @@ Here's an example of how you can refactor the code to run the privileged section
 main.js
 
 ```js
-import sudo from "sudo-prompt";
-import fs from "fs";
-import { exec } from "child_process";
+import sudo from 'sudo-prompt'
+import fs from 'fs'
+import { exec } from 'child_process'
 
-exec("which node", (error, stdout, stderr) => {
-	if (error) {
-		console.log(`error: ${error.message}`);
-		return;
-	}
-	if (stderr) {
-		console.log(`stderr: ${stderr}`);
-		return;
-	}
+exec('which node', (error, stdout, stderr) => {
+ if (error) {
+  console.log(`error: ${error.message}`)
+  return
+ }
+ if (stderr) {
+  console.log(`stderr: ${stderr}`)
+  return
+ }
 
-	const nodePath = stdout.trim();
-	const scriptPath = "./hookLinuxInputs.js";
-	const tempFilePath = "./ipc_temp_file.txt";
+ const nodePath = stdout.trim()
+ const scriptPath = './hookLinuxInputs.js'
+ const tempFilePath = './ipc_temp_file.txt'
 
-	const command = `${nodePath} ${scriptPath} -- --tempFile ${tempFilePath}`;
-	sudo.exec(command, options, (error, stdout) => {
-		if (error) {
-			console.log("Error executing child process:", error);
-		} else {
-			console.log("Child process output:", stdout);
-		}
-	});
+ const command = `${nodePath} ${scriptPath} -- --tempFile ${tempFilePath}`
+ sudo.exec(command, options, (error, stdout) => {
+  if (error) {
+   console.log('Error executing child process:', error)
+  } else {
+   console.log('Child process output:', stdout)
+  }
+ })
 
-	fs.writeFileSync(tempFilePath, "");
-	let fileContent = "";
+ fs.writeFileSync(tempFilePath, '')
+ let fileContent = ''
 
-	fs.watchFile(tempFilePath, { persistent: true, interval: 50 }, (curr, prev) => {
-		fs.readFile(tempFilePath, "utf8", (error, data) => {
-			if (error) {
-				console.log("Error reading file:", error);
-				return;
-			}
+ fs.watchFile(tempFilePath, { persistent: true, interval: 50 }, (curr, prev) => {
+  fs.readFile(tempFilePath, 'utf8', (error, data) => {
+   if (error) {
+    console.log('Error reading file:', error)
+    return
+   }
 
-			fileContent += data;
-			const messages = fileContent.split("\n");
+   fileContent += data
+   const messages = fileContent.split('\n')
 
-			messages.forEach((message) => {
-				const trimmedMessage = message.trim();
+   messages.forEach((message) => {
+    const trimmedMessage = message.trim()
 
-				console.log("Message:", trimmedMessage);
-				// Parse your message here
-				fileContent = "";
-			});
-		});
-	});
-});
+    console.log('Message:', trimmedMessage)
+    // Parse your message here
+    fileContent = ''
+   })
+  })
+ })
+})
 ```
 
 hookLinuxInputs.js
 
 ```js
-import { exec } from "child_process";
-import ChrologIOhook from "chrolog-iohook";
-import fs from "fs";
+import { exec } from 'child_process'
+import ChrologIOhook from 'chrolog-iohook'
+import fs from 'fs'
 
 const tempFilePath =
-	process.argv[process.argv.findIndex((arg, index) => arg === "--tempFile" && process.argv[index + 1]) + 1];
+ process.argv[
+  process.argv.findIndex((arg, index) => arg === '--tempFile' && process.argv[index + 1]) + 1
+ ]
 
-fs.writeFileSync(tempFilePath, "");
+fs.writeFileSync(tempFilePath, '')
 
 exec(`chmod +rw ${tempFilePath}`, (error) => {
-	if (error) {
-		console.error(error);
-		process.exit(1);
-	}
-});
+ if (error) {
+  console.error(error)
+  process.exit(1)
+ }
+})
 
 // Function to send message to the parent process
 function send(message) {
-	fs.writeFileSync(tempFilePath, message);
+ fs.writeFileSync(tempFilePath, message)
 }
-console.log("Creating instance...");
+console.log('Creating instance...')
 
-const instance = new ChrologIOhook();
+const instance = new ChrologIOhook()
 
-console.log("Hooking inputs...");
+console.log('Hooking inputs...')
 
 // Set keyboard callback
 instance.setKeyboardCallback(() => {
-	send("keyboard_event");
-});
+ send('keyboard_event')
+})
 
-console.log("Hooking mouse...");
+console.log('Hooking mouse...')
 
 instance.setMouseCallback(() => {
-	send("mouse_event");
-});
+ send('mouse_event')
+})
 
-console.log("Starting logger...");
+console.log('Starting logger...')
 
 // Start the logger
-instance.log();
+instance.log()
 
-console.log("Inputs hooked");
+console.log('Inputs hooked')
 
 // Cleanup the temp file on exit
-process.on("exit", () => {
-	if (fs.existsSync(tempFilePath)) {
-		fs.unlinkSync(tempFilePath);
-	}
-});
+process.on('exit', () => {
+ if (fs.existsSync(tempFilePath)) {
+  fs.unlinkSync(tempFilePath)
+ }
+})
 ```
 
 ## API
