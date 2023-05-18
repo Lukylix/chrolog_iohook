@@ -1,32 +1,32 @@
 {
-	"name": "chrolog-iohook",
-	"version": "1.1.1",
-	"description": "Mouse and keyboard hooks for the Chrolog tracker",
-	"main": "chrolog-iohook.js",
-	"scripts": {
-		"build": "node-gyp configure build"
-	},
-	"author": "lukylix",
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/Lukylix/chrolog_iohook.git"
-	},
-	"keywords": [
-		"chrolog",
-		"iohook",
-		"hooks",
-		"mouse",
-		"keyboard"
-	],
-	"binary": {
-		"module_name": "chrolog_iohook",
-		"module_path": "./build/Release"
-	},
-	"license": "GNU",
-	"dependencies": {
-		"node-addon-api": "^6.1.0"
-	},
-	"devDependencies": {
-		"node-gyp": "^9.3.1"
-	}
+ "name": "chrolog-iohook",
+ "version": "1.1.2",
+ "description": "Mouse and keyboard hooks for the Chrolog tracker",
+ "main": "chrolog-iohook.js",
+ "scripts": {
+  "build": "node-gyp configure build"
+ },
+ "author": "lukylix",
+ "repository": {
+  "type": "git",
+  "url": "https://github.com/Lukylix/chrolog_iohook.git"
+ },
+ "keywords": [
+  "chrolog",
+  "iohook",
+  "hooks",
+  "mouse",
+  "keyboard"
+ ],
+ "binary": {
+  "module_name": "chrolog_iohook",
+  "module_path": "./build/Release"
+ },
+ "license": "GNU",
+ "dependencies": {
+  "node-addon-api": "^6.1.0"
+ },
+ "devDependencies": {
+  "node-gyp": "^9.3.1"
+ }
 }
