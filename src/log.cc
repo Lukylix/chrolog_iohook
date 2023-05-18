@@ -92,6 +92,55 @@ namespace chrolog_iohook
   {
     return 0;
   }
+  void execute()
+  {
+  }
+  void set_utf8_locale()
+  {
+  }
+  void signal_handler(int)
+  {
+  }
+  void create_PID_file(){
+
+  }
+  void kill_existing_process(){
+
+  }
+void signal_handling_thread(){
+}
+  void set_signal_handling(){
+  }
+  void parse_char_keycode(){
+
+  }
+  void determine_system_keymap(){
+
+  }
+  void parse_input_keymap(){
+
+  }
+  void triger_events(){
+
+  }
+  void determine_keyboard_device(){
+
+  }
+  void determine_input_device(){
+
+  }
+  void update_key_state(){
+
+  }
+  void handle_keyboard(){
+
+  }
+  void handle_mouse(){
+
+  }
+  void log_loop(){
+
+  }
 } 
 
 #else // Unix-like platforms (Linux, macOS, etc.)
