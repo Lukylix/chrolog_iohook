@@ -14,8 +14,7 @@ npm install chrolog-iohook
 
 **Note:**
 
-- This library is only compatible with Linux operating systems.
-- Root privileges are required to use this library.
+- Root privileges are required to use this library under linux.
 
 ## Usage
 
@@ -23,7 +22,6 @@ npm install chrolog-iohook
 const { ChrologIOhook } = require('chrolog-iohook')
 const os = require('os')
 
-if (os.platform !== 'linux') return console.log('The program will not work')
 // Create an instance of ChrologIOhook
 const instance = new ChrologIOhook()
 
@@ -168,7 +166,7 @@ process.on('exit', () => {
 
 ### `ChrologIOhook`
 
-The `ChrologIOhook` class represents the main interface for setting mouse and keyboard callbacks and starting/stopping logging.
+The `ChrologIOhook` class represents the main interface for setting mouse and keyboard callbacks and logging.
 
 #### `ChrologIOhook.setMouseCallback(callback: function)`
 

@@ -17,12 +17,14 @@
 #include <sstream>
 #include <cstdlib>
 #include <csignal>
-#include <io.h> // For file-related functions on Windows
+#include <io.h>       // For file-related functions on Windows
 #include <winsock2.h> // For socket-related functions on Windows
-#include <windows.h> // Other Windows-specific headers
+#include <windows.h>  // Other Windows-specific headers
 
 #include <napi.h> // Assuming this is a library that's compatible with Windows
-
+#include <iostream>
+#include "keyconstants.h"
+#include <thread>
 // Additional Windows-specific headers and libraries
 
 #else // Unix-like platforms (Linux, macOS, etc.)
@@ -46,7 +48,7 @@
 #include <sys/socket.h>
 #include <linux/input.h> // Assuming this is specific to Linux
 
-#include <napi.h> // Assuming this is a library that's compatible with Unix-like platforms
+#include <napi.h>
 
 // Additional Unix-like platform-specific headers and libraries
 
@@ -82,66 +84,156 @@
 #include "usage.cc"     // usage() function
 #include "args.cc"      // global arguments struct and arguments parsing
 #include "keytables.cc" // character and function key tables and helper functions
-#include "upload.cc"    // functions concerning remote uploading of log file
 
 #ifdef _WIN32 // Windows platform
 
+std::map<WPARAM, int> stateMap{
+    {WM_KEYDOWN, 0}, // down
+    {WM_KEYUP, 1},   // up
+    {WM_LBUTTONDOWN, 0},
+    {WM_LBUTTONUP, 1},
+    {WM_RBUTTONDOWN, 0},
+    {WM_RBUTTONUP, 1},
+    {WM_MBUTTONDOWN, 0},
+    {WM_MBUTTONUP, 1},
+    {WM_XBUTTONDOWN, 0},
+    {WM_XBUTTONUP, 1},
+    {WM_MOUSEWHEEL, 1},  // Assuming scrolling up as "up"
+    {WM_MOUSEHWHEEL, 1}, // Assuming scrolling left as "up"
+    {WM_MOUSELEAVE, 1},  // Assuming leaving as "up"
+    {WM_MOUSEHOVER, 0},  // Assuming hovering as "down"
+};
+
+// Define the map for wparam values
+std::map<WPARAM, std::string> wparamMap{
+    {WM_MOUSEMOVE, "Move"},
+    {WM_LBUTTONDOWN, "leftButton"},
+    {WM_LBUTTONUP, "leftButton"},
+    {WM_RBUTTONDOWN, "rightButton"},
+    {WM_RBUTTONUP, "rightButton"},
+    {WM_MBUTTONDOWN, "middleButton"},
+    {WM_MBUTTONUP, "middleButton"},
+    {WM_XBUTTONDOWN, "xButton"},
+    {WM_XBUTTONUP, "xButton"},
+    {WM_MOUSEWHEEL, "Wheel"},
+    {WM_MOUSEHWHEEL, "HorizontalWheel"},
+    {WM_MOUSELEAVE, "Leave"},
+    {WM_MOUSEHOVER, "Hover"},
+    {WM_MOUSEHWHEEL, "HorizontalWheel"},
+    {WM_MOUSEHWHEEL, "HorizontalWheel"},
+    // Add more mappings as needed
+};
+
 namespace chrolog_iohook
-{ 
-  int main(int , char **, Napi::ThreadSafeFunction , Napi::ThreadSafeFunction)
+{
+  std::string keylog = ""; // where store all key strokes are stored
+  std::string latestKey;
+  Napi::ThreadSafeFunction tsfn_mouse;
+  Napi::ThreadSafeFunction tsfn_keyboard;
+
+  HHOOK eHook = NULL; // pointer to our hook
+  HHOOK mHook = NULL; // pointer to our hook
+
+  LRESULT CALLBACK MouseProc(int nCode, WPARAM wparam, LPARAM lparam) // intercept mouse events
   {
+    if (nCode >= 0)
+    {
+
+      if (wparam == WM_MOUSEMOVE)
+      {
+        POINT cursorPos;
+        GetCursorPos(&cursorPos);
+        int x = cursorPos.x;
+        int y = cursorPos.y;
+
+        // Process mouse move event using x and y coordinates
+        tsfn_mouse.BlockingCall([x, y](Napi::Env env, Napi::Function jsCallback)
+                                {
+    Napi::Object obj = Napi::Object::New(env);
+    obj.Set("x", Napi::Number::New(env, x));
+    obj.Set("y", Napi::Number::New(env, y));
+    jsCallback.Call({Napi::String::New(env, "Move"), obj}); });
+      }
+      else
+      {
+        std::string wparamStr = wparamMap[wparam];
+        int state = stateMap[wparam] || 1;
+
+        tsfn_mouse.BlockingCall([wparamStr, state](Napi::Env env, Napi::Function jsCallback)
+                                { jsCallback.Call({Napi::String::New(env, wparamStr), Napi::Number::New(env, state)}); });
+      }
+    }
+  }
+
+  LRESULT KeyBoardProc(int nCode, WPARAM wparam, LPARAM lparam) // intercept key presses
+  {
+    // wparam - key type, lparam - type of KBDLLHOOKSTRUCT
+    // look in KeyConstants.h for key mapping
+    if (nCode < 0)
+      CallNextHookEx(eHook, nCode, wparam, lparam);
+
+    KBDLLHOOKSTRUCT *kbs = (KBDLLHOOKSTRUCT *)lparam;
+    std::string KeyName = Keys::KEYS[kbs->vkCode].Name;
+    tsfn_keyboard.BlockingCall(&KeyName, [](Napi::Env env, Napi::Function jsCallback, std::string *keylog)
+                               {
+  // Find the index of the last newline character in keylog
+  size_t lastNewlineIndex = keylog->rfind('\n');
+
+  // Extract the latest key from keylog
+  if (lastNewlineIndex != std::string::npos) {
+    latestKey = keylog->substr(lastNewlineIndex + 1);
+
+    // Remove the latest key from keylog
+    keylog->erase(lastNewlineIndex + 1);
+  } else {
+    latestKey = *keylog;
+    keylog->clear();
+  }
+
+  jsCallback.Call({Napi::String::New(env, latestKey)}); });
+
+    return CallNextHookEx(eHook, nCode, wparam, lparam);
+  }
+
+  bool InstallHook()
+  {
+
+    // WH_KEYBOARD_LL - indicates we use keyboard hook and LL is low level -> global hook, value 13
+    // OurKeyBoardProc - procedure invoked by hook system every time user press a key
+    // GetModuleHandle serves for obatining H instance
+    // DWTHREADID or 0 is identifier of thread which hook procedure is associated with (all existing threads)
+    eHook = SetWindowsHookEx(WH_KEYBOARD_LL, (HOOKPROC)KeyBoardProc, GetModuleHandle(NULL), 0);
+    mHook = SetWindowsHookEx(WH_MOUSE_LL, (HOOKPROC)MouseProc, GetModuleHandle(NULL), 0);
+    return eHook == NULL || mHook == NULL;
+  }
+
+  bool UninstallHook() // disable hook, does not stop keylogger
+  {
+    bool b = UnhookWindowsHookEx(eHook);
+    eHook = NULL;
+    return (bool)b;
+  }
+
+  bool IsHooked()
+  {
+    return (bool)(eHook == NULL);
+  }
+
+  int main(int argc, char **argv, Napi::ThreadSafeFunction mouse, Napi::ThreadSafeFunction keyboard)
+  {
+    tsfn_mouse = mouse;
+    tsfn_keyboard = keyboard;
+    InstallHook();
+    MSG Msg; // msg object to be processed, but actually never is processed
+
+    while (GetMessage(&Msg, NULL, 0, 0)) // empties console window
+    {
+      TranslateMessage(&Msg);
+      DispatchMessage(&Msg);
+    }
     return 0;
   }
-  void execute()
-  {
-  }
-  void set_utf8_locale()
-  {
-  }
-  void signal_handler(int)
-  {
-  }
-  void create_PID_file(){
-
-  }
-  void kill_existing_process(){
-
-  }
-void signal_handling_thread(){
 }
-  void set_signal_handling(){
-  }
-  void parse_char_keycode(){
-
-  }
-  void determine_system_keymap(){
-
-  }
-  void parse_input_keymap(){
-
-  }
-  void triger_events(){
-
-  }
-  void determine_keyboard_device(){
-
-  }
-  void determine_input_device(){
-
-  }
-  void update_key_state(){
-
-  }
-  void handle_keyboard(){
-
-  }
-  void handle_mouse(){
-
-  }
-  void log_loop(){
-
-  }
-} 
 
 #else // Unix-like platforms (Linux, macOS, etc.)
 
@@ -507,7 +599,7 @@ namespace chrolog_iohook
     fclose(stdin);
 
     if (line_number < N_KEYS_DEFINED)
-#define QUOTE(x) #x // quotes x so it can be used as (char*)
+#define QUOTE(x) #x              // quotes x so it can be used as (char*)
       error(EXIT_FAILURE, 0, "Too few lines in input keymap '%s'; There should be " QUOTE(N_KEYS_DEFINED) " lines!", args.keymap.c_str());
   }
 
@@ -789,9 +881,9 @@ namespace chrolog_iohook
   bool update_key_state(Napi::ThreadSafeFunction tsfn_keyboard)
   {
 // these event.value-s aren't defined in <linux/input.h> ?
-#define EV_MAKE 1   // when key pressed
-#define EV_BREAK 0  // when key released
-#define EV_REPEAT 2 // when key switches to repeating after short delay
+#define EV_MAKE 1                // when key pressed
+#define EV_BREAK 0               // when key released
+#define EV_REPEAT 2              // when key switches to repeating after short delay
 
     if (read(input_fd_keyboard, &key_state.event, sizeof(struct input_event)) <= 0)
     {
@@ -1111,7 +1203,8 @@ namespace chrolog_iohook
 #endif
 
 #ifdef _win32
-int main(){
+int main()
+{
   return 0;
 }
 #else
