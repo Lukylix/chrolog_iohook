@@ -46,7 +46,11 @@
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
-#include <linux/input.h> // Assuming this is specific to Linux
+#include <linux/input.h>
+#include <thread>
+#include <iostream>
+#include <locale>
+#include <codecvt>
 
 #include <napi.h>
 
