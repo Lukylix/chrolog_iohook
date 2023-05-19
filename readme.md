@@ -33,7 +33,7 @@ instance.setKeyboardCallback((key) => {
 instance.setMouseCallback((event, value) => {
  console.log('Mouse callback:', event, value)
  // When event is move value will be { x, y }
- // Relative to the top left corner of the screen on Wnndows
+ // Relative to the top left corner of the screen on Windows
  // Relative to the last position on Linux
 })
 
