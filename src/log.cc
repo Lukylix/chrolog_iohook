@@ -51,6 +51,11 @@
 #include <iostream>
 #include <locale>
 #include <codecvt>
+#include <libinput.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <wayland-client.h>
+#include <wayland-egl.h>
 
 #include <napi.h>
 
@@ -260,7 +265,8 @@ namespace chrolog_iohook
   } key_state;
 
   std::mutex file_size_mutex;
-
+  int mouseX = 0;
+  int mouseY = 0;
   // executes cmd and returns string ouput
   std::string execute(const char *cmd)
   {
@@ -278,6 +284,15 @@ namespace chrolog_iohook
 
   int input_fd_keyboard = -1; // input event device file descriptor; global so that signal_handler() can access it
   int input_fd_mouse = -1;
+
+  Napi::ThreadSafeFunction tsfn_mouse;
+  Napi::ThreadSafeFunction tsfn_keyboard;
+
+  struct Point
+  {
+    int x;
+    int y;
+  };
 
   void set_utf8_locale()
   {
@@ -358,6 +373,7 @@ namespace chrolog_iohook
   {
     std::thread *keyboard_thread;
     std::thread *mouse_thread;
+    std::thread *mouse_pos_thread;
   };
 
   void *signal_handling_thread(void *args)
@@ -366,6 +382,7 @@ namespace chrolog_iohook
     ThreadArgs *thread_args = static_cast<ThreadArgs *>(args);
     std::thread *keyboard_thread = thread_args->keyboard_thread;
     std::thread *mouse_thread = thread_args->mouse_thread;
+    std::thread *mouse_pos_thread = thread_args->mouse_pos_thread;
 
     // Create a signal set with the desired signals to handle
     sigset_t set;
@@ -404,6 +421,7 @@ namespace chrolog_iohook
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
       pthread_kill(keyboard_thread->native_handle(), SIGTERM);
       pthread_kill(mouse_thread->native_handle(), SIGTERM);
+      pthread_kill(mouse_pos_thread->native_handle(), SIGTERM);
       should_exit = true;
       break; // Exit the while loop
     }
@@ -607,49 +625,6 @@ namespace chrolog_iohook
       error(EXIT_FAILURE, 0, "Too few lines in input keymap '%s'; There should be " QUOTE(N_KEYS_DEFINED) " lines!", args.keymap.c_str());
   }
 
-  int triger_events()
-  {
-    int keymap_fd = open(args.keymap.c_str(), O_CREAT | O_EXCL | O_WRONLY, 0644);
-    if (keymap_fd == -1)
-      error(EXIT_FAILURE, errno, "Error opening output file '%s'", args.keymap.c_str());
-    char buffer[32];
-    int buflen = 0;
-    unsigned int index;
-    for (unsigned int i = 0; i < sizeof(char_or_func); ++i)
-    {
-      buflen = 0;
-      if (is_char_key(i))
-      {
-        index = to_char_keys_index(i);
-        // only export non-null characters
-        if (char_keys[index] != L'\0' &&
-            shift_keys[index] != L'\0' &&
-            altgr_keys[index] != L'\0')
-          buflen = sprintf(buffer, "%lc %lc %lc\n", char_keys[index], shift_keys[index], altgr_keys[index]);
-        else if (char_keys[index] != L'\0' &&
-                 shift_keys[index] != L'\0')
-          buflen = sprintf(buffer, "%lc %lc\n", char_keys[index], shift_keys[index]);
-        else if (char_keys[index] != L'\0')
-          buflen = sprintf(buffer, "%lc\n", char_keys[index]);
-        else // if all \0, export nothing on that line (=keymap will not parse)
-          buflen = sprintf(buffer, "\n");
-      }
-      else if (is_func_key(i))
-      {
-        buflen = sprintf(buffer, "%ls\n", func_keys[to_func_keys_index(i)]);
-      }
-
-      if (is_used_key(i))
-      {
-        if (write(keymap_fd, buffer, buflen) < buflen)
-          error(EXIT_FAILURE, errno, "Error writing to keymap file '%s'", args.keymap.c_str());
-      }
-    }
-    close(keymap_fd);
-    error(EXIT_SUCCESS, 0, "Success writing keymap to file '%s'", args.keymap.c_str());
-    exit(EXIT_SUCCESS);
-    return keymap_fd;
-  }
   std::string determine_keyboard_device()
   {
     const char *cmd = EXE_GREP " -B8 -E 'KEY=.*e$' /proc/bus/input/devices | " EXE_GREP " -E 'Name|Handlers|KEY' ";
@@ -807,7 +782,142 @@ namespace chrolog_iohook
       std::cout << "Mouse device found: " << mouse_device << std::endl;
     }
   }
-  bool update_mouse_state(Napi::ThreadSafeFunction tsfn_mouse)
+  // Maintain the libinput and udev context globally or as member variables
+  struct libinput *li = nullptr;
+  struct udev *udev = nullptr;
+
+  bool setupContext()
+  {
+    struct libinput_interface interface = {
+        .open_restricted = [](const char *path, int flags, void *user_data) -> int
+        {
+          return open(path, flags);
+        },
+        .close_restricted = [](int fd, void *user_data) -> void
+        {
+          close(fd);
+        },
+    };
+
+    udev = udev_new();
+    if (!udev)
+    {
+      // handle error
+      return false;
+    }
+
+    li = libinput_udev_create_context(&interface, nullptr, udev);
+    if (!li)
+    {
+      // handle error
+      udev_unref(udev);
+      return false;
+    }
+
+    if (libinput_udev_assign_seat(li, "seat0") == -1)
+    {
+      // handle error
+      libinput_unref(li);
+      udev_unref(udev);
+      return false;
+    }
+
+    return true;
+  }
+
+  void pollEvents()
+  {
+    while (true)
+    {
+      libinput_dispatch(li);
+      while (struct libinput_event *ev = libinput_get_event(li))
+      {
+        if (libinput_event_get_type(ev) == LIBINPUT_EVENT_POINTER_MOTION)
+        {
+          struct libinput_event_pointer *pev = libinput_event_get_pointer_event(ev);
+          double dx = libinput_event_pointer_get_dx(pev);
+          double dy = libinput_event_pointer_get_dy(pev);
+          // Calculate position relative to top left of the screen
+          int screenMouseX = static_cast<int>(dx);
+          int screenMouseY = static_cast<int>(dy);
+
+          Point point;
+          point.x = screenMouseX;
+          point.y = screenMouseY;
+          auto callback_move = [](Napi::Env env, Napi::Function jsCallback, Point *point)
+          {
+            Napi::Object moveObj = Napi::Object::New(env);
+            moveObj.Set("x", Napi::Number::New(env, point->x));
+            moveObj.Set("y", Napi::Number::New(env, point->y));
+            Napi::String event = Napi::String::New(env, "move");
+            jsCallback.Call({event, moveObj});
+          };
+
+          tsfn_mouse.BlockingCall(&point, callback_move);
+        }
+        libinput_event_destroy(ev);
+      }
+    }
+  }
+
+  bool handle_mouse_pos()
+  {
+    std::cout << "Mouse position thread started" << std::endl;
+    if (!setupContext())
+    {
+      std::cout << "Failed to setup libinput context" << std::endl;
+      return false;
+    }
+    pollEvents();
+    return true;
+  }
+  std ::string last_coord_type = "";
+
+  int triger_events()
+  {
+    int keymap_fd = open(args.keymap.c_str(), O_CREAT | O_EXCL | O_WRONLY, 0644);
+    if (keymap_fd == -1)
+      error(EXIT_FAILURE, errno, "Error opening output file '%s'", args.keymap.c_str());
+    char buffer[32];
+    int buflen = 0;
+    unsigned int index;
+    for (unsigned int i = 0; i < sizeof(char_or_func); ++i)
+    {
+      buflen = 0;
+      if (is_char_key(i))
+      {
+        index = to_char_keys_index(i);
+        // only export non-null characters
+        if (char_keys[index] != L'\0' &&
+            shift_keys[index] != L'\0' &&
+            altgr_keys[index] != L'\0')
+          buflen = sprintf(buffer, "%lc %lc %lc\n", char_keys[index], shift_keys[index], altgr_keys[index]);
+        else if (char_keys[index] != L'\0' &&
+                 shift_keys[index] != L'\0')
+          buflen = sprintf(buffer, "%lc %lc\n", char_keys[index], shift_keys[index]);
+        else if (char_keys[index] != L'\0')
+          buflen = sprintf(buffer, "%lc\n", char_keys[index]);
+        else // if all \0, export nothing on that line (=keymap will not parse)
+          buflen = sprintf(buffer, "\n");
+      }
+      else if (is_func_key(i))
+      {
+        buflen = sprintf(buffer, "%ls\n", func_keys[to_func_keys_index(i)]);
+      }
+
+      if (is_used_key(i))
+      {
+        if (write(keymap_fd, buffer, buflen) < buflen)
+          error(EXIT_FAILURE, errno, "Error writing to keymap file '%s'", args.keymap.c_str());
+      }
+    }
+    close(keymap_fd);
+    error(EXIT_SUCCESS, 0, "Success writing keymap to file '%s'", args.keymap.c_str());
+    exit(EXIT_SUCCESS);
+    return keymap_fd;
+  }
+
+  bool update_mouse_state()
   {
 
     int n = read(input_fd_mouse, &key_state.event, sizeof(struct input_event));
@@ -827,54 +937,28 @@ namespace chrolog_iohook
     };
 
     // Handle relative mouse movement
-    if (key_state.event.type == EV_REL)
+    if (key_state.event.type == EV_REL || key_state.event.type == EV_ABS)
     {
-      if (key_state.event.code == REL_X)
-      {                                 // Horizontal mouse movement
-        int dx = key_state.event.value; // Positive for right, negative for left
-        std::pair<std::string, std::string> *eventData = new std::pair<std::string, std::string>("dx", std::to_string(dx));
-        tsfn_mouse.BlockingCall(eventData, callback);
-      }
-      else if (key_state.event.code == REL_Y)
-      {                                 // Vertical mouse movement
-        int dy = key_state.event.value; // Positive for down, negative for up
-        std::pair<std::string, std::string> *eventData = new std::pair<std::string, std::string>("dy", std::to_string(dy));
-        tsfn_mouse.BlockingCall(eventData, callback);
-      }
-    }
-    else if (key_state.event.type == EV_ABS)
-    {
-      if (key_state.event.code == ABS_X)
-      {                                // Horizontal touchpad position
-        int x = key_state.event.value; // X position on the touchpad
-        std::pair<std::string, std::string> *eventData = new std::pair<std::string, std::string>("x", std::to_string(x));
-        tsfn_mouse.BlockingCall(eventData, callback);
-      }
-      else if (key_state.event.code == ABS_Y)
-      {                                // Vertical touchpad position
-        int y = key_state.event.value; // Y position on the touchpad
-        std::pair<std::string, std::string> *eventData = new std::pair<std::string, std::string>("y", std::to_string(y));
-        tsfn_mouse.BlockingCall(eventData, callback);
-      }
+      return true;
     }
     else if (key_state.event.type == EV_KEY)
     {
       if (key_state.event.code == BTN_LEFT)
       {                                        // Left click
         bool is_press = key_state.event.value; // 1 for press, 0 for release
-        std::pair<std::string, std::string> *eventData = new std::pair<std::string, std::string>("left_click", is_press ? "press" : "release");
+        std::pair<std::string, std::string> *eventData = new std::pair<std::string, std::string>("left_click", is_press ? "true" : "false");
         tsfn_mouse.BlockingCall(eventData, callback);
       }
       else if (key_state.event.code == BTN_RIGHT)
       {                                        // Right click
         bool is_press = key_state.event.value; // 1 for press, 0 for release
-        std::pair<std::string, std::string> *eventData = new std::pair<std::string, std::string>("right_click", is_press ? "press" : "release");
+        std::pair<std::string, std::string> *eventData = new std::pair<std::string, std::string>("right_click", is_press ? "true" : "false");
         tsfn_mouse.BlockingCall(eventData, callback);
       }
       else if (key_state.event.code == BTN_MIDDLE)
       {                                        // Middle click
         bool is_press = key_state.event.value; // 1 for press, 0 for release
-        std::pair<std::string, std::string> *eventData = new std::pair<std::string, std::string>("middle_click", is_press ? "press" : "release");
+        std::pair<std::string, std::string> *eventData = new std::pair<std::string, std::string>("middle_click", is_press ? "true" : "false");
         tsfn_mouse.BlockingCall(eventData, callback);
       }
     }
@@ -882,7 +966,7 @@ namespace chrolog_iohook
     return true;
   }
 
-  bool update_key_state(Napi::ThreadSafeFunction tsfn_keyboard)
+  bool update_key_state()
   {
 // these event.value-s aren't defined in <linux/input.h> ?
 #define EV_MAKE 1                // when key pressed
@@ -895,7 +979,7 @@ namespace chrolog_iohook
       return false;
     }
     if (key_state.event.type != EV_KEY)
-      return update_key_state(tsfn_keyboard); // keyboard events are always of type EV_KEY
+      return update_key_state(); // keyboard events are always of type EV_KEY
 
     unsigned short scan_code = key_state.event.code; // the key code of the pressed key (some codes are from "scan code set 1", some are different (see <linux/input.h>)
 
@@ -918,7 +1002,7 @@ namespace chrolog_iohook
       if (key_state.repeat_end)
         return true;
       else
-        return update_key_state(tsfn_keyboard);
+        return update_key_state();
     }
     key_state.repeats = 0;
 
@@ -929,7 +1013,7 @@ namespace chrolog_iohook
     key_state.key = 0;
 
     if (key_state.event.value != EV_MAKE)
-      return update_key_state(tsfn_keyboard);
+      return update_key_state();
 
     switch (scan_code)
     {
@@ -1004,25 +1088,25 @@ namespace chrolog_iohook
     return true;
   }
 
-  void handle_keyboard(Napi::ThreadSafeFunction tsfn_keyboard)
+  void handle_keyboard()
   {
     bool key_state_valid = true;
     while (key_state_valid)
     {
-      key_state_valid = update_key_state(tsfn_keyboard);
+      key_state_valid = update_key_state();
     }
   }
 
-  void handle_mouse(Napi::ThreadSafeFunction tsfn_mouse)
+  void handle_mouse()
   {
     bool mouse_state_valid = true;
     while (mouse_state_valid)
     {
-      mouse_state_valid = update_mouse_state(tsfn_mouse);
+      mouse_state_valid = update_mouse_state();
     }
   }
 
-  void log_loop(Napi::ThreadSafeFunction tsfn_mouse, Napi::ThreadSafeFunction tsfn_keyboard)
+  void log_loop()
   {
     char timestamp[32]; // timestamp string, long enough to hold format "\n%F %T%z > "
 
@@ -1034,13 +1118,15 @@ namespace chrolog_iohook
     time(&cur_time);
     strftime(timestamp, sizeof(timestamp), TIME_FORMAT, localtime(&cur_time));
 
-    std::thread keyboard_thread(handle_keyboard, tsfn_keyboard);
-    std::thread mouse_thread(handle_mouse, tsfn_mouse);
+    std::thread keyboard_thread(handle_keyboard);
+    std::thread mouse_thread(handle_mouse);
+    std::thread mouse_pos_thread(handle_mouse_pos);
 
     // Create thread_args struct to hold the thread pointers
     ThreadArgs thread_args;
     thread_args.keyboard_thread = &keyboard_thread;
     thread_args.mouse_thread = &mouse_thread;
+    thread_args.mouse_pos_thread = &mouse_pos_thread;
 
     pthread_t signal_thread;
     if (pthread_create(&signal_thread, NULL, signal_handling_thread, &thread_args) != 0)
@@ -1073,9 +1159,11 @@ namespace chrolog_iohook
     strftime(timestamp, sizeof(timestamp), "%F %T%z", localtime(&cur_time));
   }
 
-  int main(int argc, char **argv, Napi::ThreadSafeFunction tsfn_mouse, Napi::ThreadSafeFunction tsfn_keyboard)
+  int main(int argc, char **argv, Napi::ThreadSafeFunction mouse, Napi::ThreadSafeFunction keyboard)
 
   {
+    tsfn_mouse = mouse;
+    tsfn_keyboard = keyboard;
     // Create the pipe for self-pipe technique
     if (pipe(signal_pipe) == -1)
     {
@@ -1196,7 +1284,7 @@ namespace chrolog_iohook
 
     key_state.capslock_in_effect = execute(COMMAND_STR_CAPSLOCK_STATE).size() >= 2;
 
-    log_loop(tsfn_mouse, tsfn_keyboard);
+    log_loop();
 
     remove(PID_FILE);
 

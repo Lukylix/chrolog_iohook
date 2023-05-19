@@ -32,6 +32,9 @@ instance.setKeyboardCallback((key) => {
 
 instance.setMouseCallback((event, value) => {
  console.log('Mouse callback:', event, value)
+ // When event is move value will be { x, y }
+ // Relative to the top left corner of the screen on Wnndows
+ // Relative to the last position on Linux
 })
 
 // Start the logger
@@ -194,6 +197,7 @@ To build the chrolog-iohook library from source, you need to have the following 
 To build the library, run the following commands:
 
 ```
+sudo apt-get install libinput-dev
 npm install
 npm run build
 ```
