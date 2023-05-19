@@ -19,8 +19,8 @@ npm install chrolog-iohook
 ## Usage
 
 ```javascript
-const ChrologIOhook = require('chrolog-iohook')
-const os = require('os')
+import ChrologIOhook from 'chrolog-iohook'
+import os from 'os'
 
 // Create an instance of ChrologIOhook
 const instance = new ChrologIOhook()
