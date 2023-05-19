@@ -12,8 +12,10 @@ jobs:
      with:
       node-version: 16.x
       registry-url: 'https://registry.npmjs.org'
-   - name: Install libinput-dev and wayland-dev
-     run: sudo apt update && sudo apt install -y libinput-dev libwayland-dev
+   - name: Install depencencies
+        run: |
+          sudo apt update
+          sudo apt install -y libinput-dev libwayland-dev libwlroots-dev
    - run: npm ci
    - name: Check if package version has changed
      id: version_check
