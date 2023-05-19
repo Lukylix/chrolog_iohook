@@ -1,41 +1,41 @@
 name: Publish Package to npmjs
 on:
-  push:
-    branches:
-      - '*'
+ push:
+  branches:
+   - '*'
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-  
-      steps:
-        - uses: actions/checkout@v3
+ build:
+  runs-on: ubuntu-latest
 
-        # Setup .npmrc file to publish to npm
-        - uses: actions/setup-node@v3
-          with:
-            node-version: '16.x'
-            registry-url: 'https://registry.npmjs.org'
+  steps:
+   - uses: actions/checkout@v3
 
-        - name: Install libinput-dev and wayland-dev
-            run: |
-              sudo apt update
-              sudo apt install -y libinput-dev libwayland-dev
+   # Setup .npmrc file to publish to npm
+   - uses: actions/setup-node@v3
+     with:
+      node-version: '16.x'
+      registry-url: 'https://registry.npmjs.org'
+
+   - name: Install libinput-dev and wayland-dev
+        run: |
+          sudo apt update
+          sudo apt install -y libinput-dev libwayland-dev
 
 
-        - run: npm ci
-        - name: Check if package version has changed
-          id: version_check
-          run: |
-            CHANGED=$(node -pe "require('./package.json').version !== require('./package-lock.json').version")
-            if [ "$CHANGED" = "true" ]; then
-              echo "::set-output name=version_changed::true"
-            else
-              echo "::set-output name=version_changed::false"
-            fi
+   - run: npm ci
+   - name: Check if package version has changed
+     id: version_check
+     run: |
+      CHANGED=$(node -pe "require('./package.json').version !== require('./package-lock.json').version")
+      if [ "$CHANGED" = "true" ]; then
+        echo "::set-output name=version_changed::true"
+      else
+        echo "::set-output name=version_changed::false"
+      fi
 
-        - name: Publish package to npm
-          if: ${{ steps.version_check.outputs.version_changed == 'true' }}
-          run: npm publish
-          env:
-            NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+   - name: Publish package to npm
+     if: ${{ steps.version_check.outputs.version_changed == 'true' }}
+     run: npm publish
+     env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
