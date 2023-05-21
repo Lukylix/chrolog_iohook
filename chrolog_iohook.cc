@@ -8,6 +8,8 @@ namespace chrolog_iohook
   int main(int argc, char **argv, Napi::ThreadSafeFunction tsfn_mouse, Napi::ThreadSafeFunction tsfn_keyboard);
 }
 
+std::atomic<bool> g_should_exit(false);
+
 class ChrologIOhook : public Napi::ObjectWrap<ChrologIOhook>
 {
 public:
@@ -22,7 +24,7 @@ private:
   Napi::Value SetMouseCallback(const Napi::CallbackInfo &info);
   Napi::Value SetKeyboardCallback(const Napi::CallbackInfo &info);
   Napi::Value Log(const Napi::CallbackInfo &info);
-
+  Napi::Value Stop(const Napi::CallbackInfo &info);
   // ... other methods ...
 };
 
@@ -36,6 +38,8 @@ Napi::Object ChrologIOhook::Init(Napi::Env env, Napi::Object exports)
                                                               InstanceMethod("setMouseCallback", &ChrologIOhook::SetMouseCallback),
                                                               InstanceMethod("setKeyboardCallback", &ChrologIOhook::SetKeyboardCallback),
                                                               InstanceMethod("log", &ChrologIOhook::Log),
+                                                              InstanceMethod("stop", &ChrologIOhook::Stop),
+
                                                           });
 
   constructor = Napi::Persistent(func);
@@ -86,6 +90,27 @@ Napi::Value ChrologIOhook::Log(const Napi::CallbackInfo &info)
   worker->Queue();
 
   return deferred.Promise();
+}
+
+Napi::Value ChrologIOhook::Stop(const Napi::CallbackInfo &info)
+{
+  Napi::Env env = info.Env();
+
+  if (info.Length() != 0)
+  {
+    Napi::TypeError::New(env, "No arguments expected").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  g_should_exit = true;
+
+  // If the thread is joinable (i.e., it is running), then join it
+  if (nativeThread.joinable())
+  {
+    nativeThread.join();
+  }
+
+  return env.Undefined();
 }
 
 ChrologIOhook::ChrologIOhook(const Napi::CallbackInfo &info) : Napi::ObjectWrap<ChrologIOhook>(info)

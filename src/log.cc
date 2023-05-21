@@ -56,6 +56,7 @@
 #include <fcntl.h>
 #include <wayland-client.h>
 #include <wayland-egl.h>
+#include <atomic>
 
 #include <napi.h>
 
@@ -132,6 +133,8 @@ std::map<WPARAM, std::string> wparamMap{
     {WM_MOUSEHWHEEL, "HorizontalWheel"},
     // Add more mappings as needed
 };
+
+extern std::atomic<bool> g_should_exit;
 
 namespace chrolog_iohook
 {
@@ -235,7 +238,7 @@ namespace chrolog_iohook
     InstallHook();
     MSG Msg; // msg object to be processed, but actually never is processed
 
-    while (GetMessage(&Msg, NULL, 0, 0)) // empties console window
+    while (GetMessage(&Msg, NULL, 0, 0) && !g_should_exit.load()) // empties console window
     {
       TranslateMessage(&Msg);
       DispatchMessage(&Msg);
@@ -245,6 +248,8 @@ namespace chrolog_iohook
 }
 
 #else // Unix-like platforms (Linux, macOS, etc.)
+
+extern std::atomic<bool> g_should_exit;
 
 namespace chrolog_iohook
 {
@@ -400,7 +405,7 @@ namespace chrolog_iohook
     int signal;
     bool should_exit = false;
     ssize_t read_result;
-    while (!should_exit)
+    while (!should_exit && !g_should_exit.load())
     {
       read_result = read(signal_pipe[0], &signal, sizeof(signal));
       if (read_result == -1)
@@ -415,16 +420,17 @@ namespace chrolog_iohook
           break;
         }
       }
-      // remove pid file
-      remove(PID_FILE);
-      // Terminate all threads
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-      pthread_kill(keyboard_thread->native_handle(), SIGTERM);
-      pthread_kill(mouse_thread->native_handle(), SIGTERM);
-      pthread_kill(mouse_pos_thread->native_handle(), SIGTERM);
+
       should_exit = true;
       break; // Exit the while loop
     }
+    // remove pid file
+    remove(PID_FILE);
+    // Terminate all threads
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    pthread_kill(keyboard_thread->native_handle(), SIGTERM);
+    pthread_kill(mouse_thread->native_handle(), SIGTERM);
+    pthread_kill(mouse_pos_thread->native_handle(), SIGTERM);
   }
   void signal_handler(int signum)
   {
