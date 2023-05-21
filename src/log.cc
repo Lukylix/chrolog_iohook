@@ -108,10 +108,8 @@ std::map<WPARAM, int> stateMap{
     {WM_MBUTTONUP, 1},
     {WM_XBUTTONDOWN, 0},
     {WM_XBUTTONUP, 1},
-    {WM_MOUSEWHEEL, 1},  // Assuming scrolling up as "up"
-    {WM_MOUSEHWHEEL, 1}, // Assuming scrolling left as "up"
-    {WM_MOUSELEAVE, 1},  // Assuming leaving as "up"
-    {WM_MOUSEHOVER, 0},  // Assuming hovering as "down"
+    {WM_MOUSELEAVE, 1}, // Assuming leaving as "up"
+    {WM_MOUSEHOVER, 0}, // Assuming hovering as "down"
 };
 
 // Define the map for wparam values
@@ -150,6 +148,7 @@ namespace chrolog_iohook
   {
     if (nCode >= 0)
     {
+      MSLLHOOKSTRUCT *mouseInfo = (MSLLHOOKSTRUCT *)lparam;
 
       if (wparam == WM_MOUSEMOVE)
       {
@@ -165,6 +164,14 @@ namespace chrolog_iohook
     obj.Set("x", Napi::Number::New(env, x));
     obj.Set("y", Napi::Number::New(env, y));
     jsCallback.Call({Napi::String::New(env, "Move"), obj}); });
+      }
+      else if (wparam == WM_MOUSEWHEEL || wparam == WM_MOUSEHWHEEL)
+      {
+        std::string wparamStr = wparamMap[wparam];
+        short wheelDelta = HIWORD(mouseInfo->mouseData);
+        std::cout << "wheelDelta: " << wheelDelta << std::endl;
+        tsfn_mouse.BlockingCall([wparamStr, wheelDelta](Napi::Env env, Napi::Function jsCallback)
+                                { jsCallback.Call({Napi::String::New(env, wparamStr), Napi::Number::New(env, wheelDelta)}); });
       }
       else
       {
@@ -219,16 +226,13 @@ namespace chrolog_iohook
     return eHook == NULL || mHook == NULL;
   }
 
-  bool UninstallHook() // disable hook, does not stop keylogger
+  bool UninstallHooks()
   {
-    bool b = UnhookWindowsHookEx(eHook);
+    bool keyboardUnhooked = UnhookWindowsHookEx(eHook);
+    bool mouseUnhooked = UnhookWindowsHookEx(mHook);
     eHook = NULL;
-    return (bool)b;
-  }
-
-  bool IsHooked()
-  {
-    return (bool)(eHook == NULL);
+    mHook = NULL;
+    return keyboardUnhooked && mouseUnhooked;
   }
 
   int main(int argc, char **argv, Napi::ThreadSafeFunction mouse, Napi::ThreadSafeFunction keyboard)
@@ -238,11 +242,23 @@ namespace chrolog_iohook
     InstallHook();
     MSG Msg; // msg object to be processed, but actually never is processed
 
-    while (GetMessage(&Msg, NULL, 0, 0) && !g_should_exit.load()) // empties console window
+    while (true)
     {
-      TranslateMessage(&Msg);
-      DispatchMessage(&Msg);
+      if (PeekMessage(&Msg, NULL, 0, 0, PM_REMOVE))
+      {
+        TranslateMessage(&Msg);
+        DispatchMessage(&Msg);
+      }
+      if (g_should_exit.load())
+      {
+        break;
+      }
     }
+
+    UninstallHooks();
+    std::cout << "Hooks uninstalled." << std::endl;
+    tsfn_mouse.Release();
+    tsfn_keyboard.Release();
     return 0;
   }
 }
@@ -427,10 +443,13 @@ namespace chrolog_iohook
     // remove pid file
     remove(PID_FILE);
     // Terminate all threads
+
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     pthread_kill(keyboard_thread->native_handle(), SIGTERM);
     pthread_kill(mouse_thread->native_handle(), SIGTERM);
     pthread_kill(mouse_pos_thread->native_handle(), SIGTERM);
+    tsfn_mouse.Release();
+    tsfn_keyboard.Release();
   }
   void signal_handler(int signum)
   {
@@ -1293,21 +1312,8 @@ namespace chrolog_iohook
     log_loop();
 
     remove(PID_FILE);
-
-    exit(EXIT_SUCCESS);
+    return 0;
   } // main()
 
 } // namespace chrolog_iohook
-#endif
-
-#ifdef _win32
-int main()
-{
-  return 0;
-}
-#else
-int main(int argc, char **argv, Napi::ThreadSafeFunction tsfn_mouse, Napi::ThreadSafeFunction tsfn_keyboard)
-{
-  return chrolog_iohook::main(argc, argv, tsfn_mouse, tsfn_keyboard);
-}
 #endif

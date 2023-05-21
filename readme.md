@@ -31,15 +31,17 @@ instance.setKeyboardCallback((key) => {
 
 instance.setMouseCallback((event, value) => {
  console.log('Mouse callback:', event, value)
- // When event is move value will be { x, y }
- // Relative to the top left corner of the screen on Windows
- // Relative to the last position on Linux
 })
 
-// Start the logger
+//Start the logger
 instance.log()
 
 console.log('Logging keys...')
+
+setTimeout(() => {
+ console.log('Stopping logger...')
+ instance.stop()
+}, 10000)
 ```
 
 ## Security and Interprocess Communication
@@ -185,6 +187,12 @@ Sets the callback function for keyboard events.
 #### `ChrologIOhook.log(): Promise`
 
 Starts logging mouse and keyboard events. Returns a promise that resolves when logging is started successfully or rejects with an error if logging fails.
+
+#### `ChrologIOhook.stop(): void`
+
+Stops the logging of mouse and keyboard events.
+
+This method stops the logger and ceases the recording of mouse and keyboard events. Once called, the callbacks for mouse and keyboard events will no longer be triggered.
 
 ## Development
 

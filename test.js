@@ -5,11 +5,11 @@ const instance = new ChrologIOhook()
 
 // Set keyboard callback
 instance.setKeyboardCallback((key) => {
- console.log('Keyboard callback:', key)
+  console.log('Keyboard callback:', key)
 })
 
 instance.setMouseCallback((event, value) => {
- console.log('Mouse callback:', event, value)
+  console.log('Mouse callback:', event, value)
 })
 
 //Start the logger
@@ -18,6 +18,6 @@ instance.log()
 console.log('Logging keys...')
 
 setTimeout(() => {
- console.log('Stopping logger...')
- instance.stop()
-}, 5000)
+  console.log('Stopping logger...')
+  instance.stop()
+}, 10000)

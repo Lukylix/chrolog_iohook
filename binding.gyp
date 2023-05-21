@@ -7,7 +7,6 @@
         "<!@(node -p \"require('node-addon-api').include\")"
       ],
       "dependencies": ["<!(node -p \"require('node-addon-api').gyp\")"],
-      "libraries": [ "-ludev", "-linput" , "-lwayland-client", "-lwayland-server", "-lwlroots"],
       "conditions": [
         ['OS=="win"', {
           "defines": ["_WIN32"],
@@ -16,7 +15,10 @@
               "ExceptionHandling": 1
             }
           }
-        }]
+        }],
+        ['OS=="linux"', {
+          "libraries": [ "-ludev", "-linput", "-lwayland-client", "-lwayland-server", "-lwlroots"]
+        }],
       ],
       "cflags!": ["-fno-exceptions"],
       "cflags_cc!": ["-fno-exceptions"],
