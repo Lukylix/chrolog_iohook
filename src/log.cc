@@ -169,7 +169,6 @@ namespace chrolog_iohook
       {
         std::string wparamStr = wparamMap[wparam];
         short wheelDelta = HIWORD(mouseInfo->mouseData);
-        std::cout << "wheelDelta: " << wheelDelta << std::endl;
         tsfn_mouse.BlockingCall([wparamStr, wheelDelta](Napi::Env env, Napi::Function jsCallback)
                                 { jsCallback.Call({Napi::String::New(env, wparamStr), Napi::Number::New(env, wheelDelta)}); });
       }
