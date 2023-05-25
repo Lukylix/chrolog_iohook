@@ -89,7 +89,6 @@
 #define COMMAND_STR_CAPSLOCK_STATE ("{ { xset q 2>/dev/null | grep -q -E 'Caps Lock: +on'; } || { setleds 2>/dev/null | grep -q 'CapsLock on'; }; } && echo on")
 
 #define INPUT_EVENT_PATH "/dev/input/" // standard path
-#define PID_FILE "/var/run/chrolog_iohook.pid"
 
 #include "usage.cc"     // usage() function
 #include "args.cc"      // global arguments struct and arguments parsing
@@ -334,58 +333,6 @@ namespace chrolog_iohook
     // TODO:
   }
 
-  void create_PID_file()
-  {
-    // create temp file carrying PID for later retrieval
-    int pid_fd = open(PID_FILE, O_WRONLY | O_CREAT | O_EXCL, 0644);
-    if (pid_fd != -1)
-    {
-      char pid_str[16] = {0};
-      sprintf(pid_str, "%d", getpid());
-      if (write(pid_fd, pid_str, strlen(pid_str)) == -1)
-        error(EXIT_FAILURE, errno, "Error writing to PID file '" PID_FILE "'");
-      close(pid_fd);
-    }
-    else
-    {
-      if (errno == EEXIST) // This should never happen
-        error(EXIT_FAILURE, errno, "Another process already running? Quitting. (" PID_FILE ")");
-      else
-        error(EXIT_FAILURE, errno, "Error opening PID file '" PID_FILE "'");
-    }
-  }
-
-  void kill_existing_process()
-  {
-    pid_t pid;
-    bool via_file = true;
-    bool via_pipe = true;
-    FILE *temp_file = fopen(PID_FILE, "r");
-
-    via_file &= (temp_file != NULL);
-
-    if (via_file)
-    { // kill process with pid obtained from PID file
-      via_file &= (fscanf(temp_file, "%d", &pid) == 1);
-      fclose(temp_file);
-    }
-
-    if (!via_file)
-    { // if reading PID from temp_file failed, try ps-grep pipe
-      via_pipe &= (sscanf(execute(COMMAND_STR_GET_PID).c_str(), "%d", &pid) == 1);
-      via_pipe &= (pid != getpid());
-    }
-
-    if (via_file || via_pipe)
-    {
-      remove(PID_FILE);
-      kill(pid, SIGINT);
-
-      exit(EXIT_SUCCESS); // process killed successfully, exit
-    }
-    error(EXIT_FAILURE, 0, "No process killed");
-  }
-
   sigset_t set;
   int signal_pipe[2]; //  Pipe for self-pipe technique
 
@@ -439,8 +386,6 @@ namespace chrolog_iohook
       should_exit = true;
       break; // Exit the while loop
     }
-    // remove pid file
-    remove(PID_FILE);
     // Terminate all threads
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -1204,9 +1149,6 @@ namespace chrolog_iohook
 
     if (geteuid())
       error(EXIT_FAILURE, errno, "Got r00t?");
-    // kill existing chrolog_iohook process
-    if (args.kill)
-      kill_existing_process();
 
     // if neither start nor export, that must be an error
     if (!args.start && !(args.flags & FLAG_EXPORT_KEYMAP))
@@ -1284,9 +1226,6 @@ namespace chrolog_iohook
     seteuid(getuid());
     setegid(getgid());
 
-    if (access(PID_FILE, F_OK) != -1) // PID file already exists
-      error(EXIT_FAILURE, errno, "Another process already running? Quitting. (" PID_FILE ")");
-
     // if (!(args.flags & FLAG_NO_DAEMON))
     // {
     //   int nochdir = 1;                    // don't change cwd to root (allow relative output file paths)
@@ -1295,13 +1234,8 @@ namespace chrolog_iohook
     //     error(EXIT_FAILURE, errno, "Failed to become daemon");
     // }
 
-    // now we need those privileges back in order to create system-wide PID_FILE
     seteuid(0);
     setegid(0);
-    if (!(args.flags & FLAG_NO_DAEMON))
-    {
-      create_PID_file();
-    }
 
     // now we've got everything we need, finally drop privileges by becoming 'nobody'
     // setegid(65534); seteuid(65534);   // commented-out, I forgot why xD
@@ -1310,7 +1244,6 @@ namespace chrolog_iohook
 
     log_loop();
 
-    remove(PID_FILE);
     return 0;
   } // main()
 
