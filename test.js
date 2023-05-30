@@ -17,7 +17,4 @@ instance.log()
 
 console.log('Logging keys...')
 
-setTimeout(() => {
-  console.log('Stopping logger...')
-  instance.stop()
-}, 10000)
+

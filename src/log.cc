@@ -251,6 +251,8 @@ namespace chrolog_iohook
       {
         break;
       }
+      // Sleep for 1 millisecond
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
     UninstallHooks();
