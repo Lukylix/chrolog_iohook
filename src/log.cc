@@ -180,6 +180,7 @@ namespace chrolog_iohook
                                 { jsCallback.Call({Napi::String::New(env, wparamStr), Napi::Number::New(env, state)}); });
       }
     }
+    return CallNextHookEx(mHook, nCode, wparam, lparam);
   }
 
   LRESULT KeyBoardProc(int nCode, WPARAM wparam, LPARAM lparam) // intercept key presses
