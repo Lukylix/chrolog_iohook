@@ -192,22 +192,7 @@ namespace chrolog_iohook
     KBDLLHOOKSTRUCT *kbs = (KBDLLHOOKSTRUCT *)lparam;
     std::string KeyName = Keys::KEYS[kbs->vkCode].Name;
     tsfn_keyboard.BlockingCall(&KeyName, [](Napi::Env env, Napi::Function jsCallback, std::string *keylog)
-                               {
-  // Find the index of the last newline character in keylog
-  size_t lastNewlineIndex = keylog->rfind('\n');
-
-  // Extract the latest key from keylog
-  if (lastNewlineIndex != std::string::npos) {
-    latestKey = keylog->substr(lastNewlineIndex + 1);
-
-    // Remove the latest key from keylog
-    keylog->erase(lastNewlineIndex + 1);
-  } else {
-    latestKey = *keylog;
-    keylog->clear();
-  }
-
-  jsCallback.Call({Napi::String::New(env, latestKey)}); });
+                               { jsCallback.Call({Napi::String::New(env, *keylog)}); });
 
     return CallNextHookEx(eHook, nCode, wparam, lparam);
   }
