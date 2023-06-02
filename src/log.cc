@@ -187,13 +187,12 @@ namespace chrolog_iohook
     // wparam - key type, lparam - type of KBDLLHOOKSTRUCT
     // look in KeyConstants.h for key mapping
     if (nCode < 0)
-      CallNextHookEx(eHook, nCode, wparam, lparam);
+      return CallNextHookEx(eHook, nCode, wparam, lparam);
 
     KBDLLHOOKSTRUCT *kbs = (KBDLLHOOKSTRUCT *)lparam;
     std::string KeyName = Keys::KEYS[kbs->vkCode].Name;
     tsfn_keyboard.BlockingCall(&KeyName, [](Napi::Env env, Napi::Function jsCallback, std::string *keylog)
                                { jsCallback.Call({Napi::String::New(env, *keylog)}); });
-
     return CallNextHookEx(eHook, nCode, wparam, lparam);
   }
 
